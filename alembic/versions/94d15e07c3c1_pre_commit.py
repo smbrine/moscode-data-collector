@@ -1,17 +1,19 @@
-"""fixing basemodel
+"""pre-commit
 
-Revision ID: 544e89409846
-Revises: 161571458e43
-Create Date: 2024-02-08 20:37:32.931856
+Revision ID: 94d15e07c3c1
+Revises: 668b9069ab86
+Create Date: 2024-02-12 04:54:28.300021
 
 """
-
 from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "544e89409846"
-down_revision: Union[str, None] = "161571458e43"
+revision: str = '94d15e07c3c1'
+down_revision: Union[str, None] = '668b9069ab86'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

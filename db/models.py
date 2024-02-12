@@ -73,7 +73,8 @@ join_client_address = Table(
 class Client(BaseModel):
     __tablename__ = "clients"
     name = Column(String, nullable=True, index=False, unique=False)
-    phone = Column(BigInteger, nullable=False, index=True, unique=True)
+    phone = Column(BigInteger, nullable=True, index=True, unique=True)
+    email = Column(String, nullable=True, index=True, unique=True)
     message = Column(String, nullable=True, index=False, unique=False)
     submission_amount = Column(
         Integer, nullable=False, index=False, unique=False
@@ -93,13 +94,18 @@ class Client(BaseModel):
         return result.scalars().first()
 
     @classmethod
+    async def get_by_email(cls, db: AsyncSession, email: str):
+        stmt = select(cls).filter(cls.email == email)
+        result = await db.execute(stmt)
+        return result.scalars().first()
+
+    @classmethod
     async def get_by_ip_address(cls, db: AsyncSession, ip_address: str):
         stmt = select(Address).filter_by(ip=ip_address)
         result = await db.execute(stmt)
         return result.scalars().first()
 
     async def increment_submission_amount(self, db: AsyncSession):
-        # Assuming self is the instance of Client you want to update
         self.submission_amount += 1
 
         if self.submission_amount > 5:
@@ -108,15 +114,15 @@ class Client(BaseModel):
         db.add(self)
         try:
             await db.commit()  # Commit the transaction
-            await db.refresh(
-                self
-            )  # Refresh the instance from the database
+            await db.refresh(self)  # Refresh the instance from the database
         except Exception as e:
             await db.rollback()  # Rollback in case of error
             raise RuntimeError(f"Failed to increment count: {e}") from e
 
     @classmethod
-    async def get_submission_amount(cls, db: AsyncSession):  # pylint: disable=W0613
+    async def get_submission_amount(
+        cls, db: AsyncSession
+    ):  # pylint: disable=W0613
         return cls.submission_amount
 
     async def set_spam(self, db: AsyncSession):
@@ -124,12 +130,30 @@ class Client(BaseModel):
         db.add(self)
         try:
             await db.commit()  # Commit the transaction
-            await db.refresh(
-                self
-            )  # Refresh the instance from the database
+            await db.refresh(self)  # Refresh the instance from the database
         except Exception as e:
             await db.rollback()  # Rollback in case of error
             raise RuntimeError(f"Failed to increment count: {e}") from e
+
+    async def set_email(self, db: AsyncSession, email: str):
+        self.email = email
+        db.add(self)
+        try:
+            await db.commit()
+            await db.refresh(self)
+        except Exception as e:
+            await db.rollback()
+            raise RuntimeError(f"Failed to set email: {e}") from e
+
+    async def set_phone(self, db: AsyncSession, phone: str):
+        self.phone = phone
+        db.add(self)
+        try:
+            await db.commit()
+            await db.refresh(self)
+        except Exception as e:
+            await db.rollback()
+            raise RuntimeError(f"Failed to set email: {e}") from e
 
     async def add_ip_address(self, db: AsyncSession, ip_address: str):
         # Check if the IP address already exists
@@ -210,15 +234,15 @@ class Address(BaseModel):
         db.add(self)  # Mark the instance as modified
         try:
             await db.commit()  # Commit the transaction
-            await db.refresh(
-                self
-            )  # Refresh the instance from the database
+            await db.refresh(self)  # Refresh the instance from the database
         except Exception as e:
             await db.rollback()  # Rollback in case of error
             raise RuntimeError(f"Failed to increment count: {e}") from e
 
     @classmethod
-    async def get_submission_amount(cls, db: AsyncSession):  # pylint: disable=W0613
+    async def get_submission_amount(
+        cls, db: AsyncSession
+    ):  # pylint: disable=W0613
         return cls.submission_amount
 
     async def set_spam(self, db: AsyncSession):
@@ -226,9 +250,7 @@ class Address(BaseModel):
         db.add(self)
         try:
             await db.commit()  # Commit the transaction
-            await db.refresh(
-                self
-            )  # Refresh the instance from the database
+            await db.refresh(self)  # Refresh the instance from the database
         except Exception as e:
             await db.rollback()  # Rollback in case of error
             raise RuntimeError(f"Failed to increment count: {e}") from e

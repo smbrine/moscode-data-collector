@@ -77,5 +77,6 @@ sessionmanager = DatabaseSessionManager()
 
 
 async def get_db():
+    print('New session!')
     async with sessionmanager.session() as session:
         yield session

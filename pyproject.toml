@@ -8,7 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.11"
 fastapi = "^0.109.2"
-pydantic = "^2.6.1"
+pydantic = {extras = ["email"], version = "^2.6.1"}
 pydantic-settings = "^2.1.0"
 python-dotenv = "^1.0.1"
 sqlalchemy = "^2.0.25"

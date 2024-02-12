@@ -1,7 +1,7 @@
 """initial
 
 Revision ID: 6c35c3a6816b
-Revises: 
+Revises:
 Create Date: 2024-02-07 20:31:37.563806
 
 """
@@ -26,9 +26,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(), nullable=True),
         sa.Column("phone", sa.Integer(), nullable=False),
         sa.Column("message", sa.String(), nullable=True),
-        sa.Column(
-            "count", sa.Integer(), autoincrement=True, nullable=False
-        ),
+        sa.Column("count", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("id", sa.String(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),

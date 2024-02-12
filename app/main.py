@@ -17,9 +17,9 @@ from db import models
 from db.main import get_db, sessionmanager
 from kafka.main import get_kafka_producer
 
-project_dir = pathlib.Path(__file__).resolve().parents[1]
-sys.path.append(str(project_dir))
 project_dir = pathlib.Path(__file__).resolve().parents[0]
+sys.path.append(str(project_dir))
+project_dir = pathlib.Path(__file__).resolve().parents[1]
 sys.path.append(str(project_dir))
 project_dir = pathlib.Path(__file__).resolve().parents[2]
 sys.path.append(str(project_dir))
@@ -59,36 +59,37 @@ class EndpointFilter(logging.Filter):
 # Filter out /metrics
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
+if not settings.DEBUG:
 
-@app.middleware("http")
-async def rate_limiter_middleware(
-    request: Request,
-    call_next,
-):
-    if request.method != "OPTIONS":
-        ip_address = (
-            request.headers.get("X-Real-IP") or request.client.host
-        )
-
-        current_time_tuple = await redis.execute_command("TIME")
-        current_time = float(
-            f"{current_time_tuple[0]}.{current_time_tuple[1]}"
-        )
-
-        last_request_time = await redis.get(ip_address)
-
-        if (
-            last_request_time is not None
-            and current_time - float(last_request_time) < 1
-        ):
-            return JSONResponse(
-                content={"detail": "Too many requests"}, status_code=429
+    @app.middleware("http")
+    async def rate_limiter_middleware(
+        request: Request,
+        call_next,
+    ):
+        if request.method != "OPTIONS":
+            ip_address = (
+                request.headers.get("X-Real-IP") or request.client.host
             )
 
-        await redis.set(ip_address, str(current_time), ex=2)
+            current_time_tuple = await redis.execute_command("TIME")
+            current_time = float(
+                f"{current_time_tuple[0]}.{current_time_tuple[1]}"
+            )
 
-    response = await call_next(request)
-    return response
+            last_request_time = await redis.get(ip_address)
+
+            if (
+                last_request_time is not None
+                and current_time - float(last_request_time) < 1
+            ):
+                return JSONResponse(
+                    content={"detail": "Too many requests"}, status_code=429
+                )
+
+            await redis.set(ip_address, str(current_time), ex=2)
+
+        response = await call_next(request)
+        return response
 
 
 @app.post("/api/submit-form")
@@ -100,21 +101,63 @@ async def send_message(
 ):
     ip_address = request.headers.get("X-Real-IP") or request.client.host
 
-    if user_in_db := await models.Client.get_by_phone(db, form.phone):
-        await user_in_db.increment_submission_amount(db)
-        await user_in_db.add_ip_address(db, ip_address)
-        raise HTTPException(status_code=400, detail="User already exists")
+    if client_in_db := (
+        (await models.Client.get_by_phone(db, form.phone))
+        if form.phone
+        else None
+    ):
+        if client_in_db.email:
+            await client_in_db.increment_submission_amount(db)
+            await client_in_db.add_ip_address(db, ip_address)
+            raise HTTPException(
+                status_code=400, detail="User already exists"
+            )
+        if not form.email:
+            pass
+        if not await models.Client.get_by_email(db, form.email):
+            await client_in_db.set_email(db, form.email)
+        else:
+            await client_in_db.increment_submission_amount(db)
+            await client_in_db.add_ip_address(db, ip_address)
+            raise HTTPException(
+                status_code=400, detail="User already exists"
+            )
+    elif client_in_db := (
+        (await models.Client.get_by_email(db, form.email))
+        if form.email
+        else None
+    ):
+        if client_in_db.phone:
+            await client_in_db.increment_submission_amount(db)
+            await client_in_db.add_ip_address(db, ip_address)
+            raise HTTPException(
+                status_code=400, detail="User already exists"
+            )
+        if not form.phone:
+            pass
+        if not await models.Client.get_by_phone(db, form.phone):
+            await client_in_db.set_phone(db, form.phone)
+        else:
+            await client_in_db.increment_submission_amount(db)
+            await client_in_db.add_ip_address(db, ip_address)
+            raise HTTPException(
+                status_code=400, detail="User already exists"
+            )
+    else:
+        new_client = await models.Client.create(
+            db, submission_amount=1, **form.model_dump()
+        )
+        await new_client.add_ip_address(db, ip_address)
 
-    new_client = await models.Client.create(
-        db, submission_amount=1, **form.model_dump()
-    )
-    await new_client.add_ip_address(db, ip_address)
     try:
         await producer.send(
             "telegram-newclient-notify", value=form.model_dump()
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        await producer.send(
+            'telegram-arbitrary-data', value={"error": str(e)}
+        )
+        raise HTTPException(status_code=500) from e
 
 
 # @app.get("/api/request")
@@ -145,6 +188,14 @@ async def healthz():
 #         raise HTTPException(status_code=400, detail="Invalid secret key")
 #
 #     return await models.Client.get_all(db)
+
+
+# @app.post("/test")
+# async def test(
+#     form: schemas.FormSend,
+# ):
+#     print(form.model_dump())
+#     return JSONResponse(status_code=401, content=form.model_dump())
 
 
 if __name__ == "__main__":
